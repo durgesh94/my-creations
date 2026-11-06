@@ -28,7 +28,8 @@ collection = chroma_client.get_collection(
 )
 
 # 5. Receive user question
-question = "Can I cancel my appointment one day before?"
+# question = "Can I cancel my appointment one day before?"
+question = "What is the refund policy for cancelled surgeries?"
 
 # 6. Generate query embedding
 query_embedding = embedding_model.encode(question)

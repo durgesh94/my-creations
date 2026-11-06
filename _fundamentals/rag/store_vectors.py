@@ -22,9 +22,14 @@ client = chromadb.PersistentClient(
 )
 
 # 6. Create collection
-collection = client.get_or_create_collection(
-    name="hams_hospital_policies"
-)
+collection_name = "hams_hospital_policies"
+
+try:
+    client.delete_collection(name=collection_name)
+except Exception:
+    pass
+
+collection = client.create_collection(name=collection_name)
 
 # 7. Store chunks and embeddings
 collection.upsert(
