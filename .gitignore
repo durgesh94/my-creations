@@ -55,3 +55,9 @@ docker-compose.override.yml
 .venv/
 __pycache__/
 .pytest_cache/
+
+
+.env
+.venv/
+chroma_db/
+__pycache__/

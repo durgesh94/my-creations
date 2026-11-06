@@ -1,0 +1,13 @@
+Hospital Admission Policy
+
+Patient Registration:
+Patients must provide their full name, age, contact number, and valid identification proof during registration.
+
+Admission Requirements:
+Patients requiring hospitalization must receive an admission recommendation from a qualified doctor. Patients must provide their medical history and insurance details, if applicable.
+
+Cancellation Policy:
+Patients can cancel their appointments up to 24 hours before the scheduled appointment. Cancellations made less than 24 hours before the appointment may be subject to cancellation charges.
+
+Discharge Procedure:
+Before discharge, patients must settle outstanding bills and collect their discharge summary, prescriptions, and medical reports from the hospital.
