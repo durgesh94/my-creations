@@ -1,20 +1,15 @@
+
 {
   "name": "my-creations",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "private": true,
+  "packageManager": "pnpm@11.5.2",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "11.5.2",
-      "onFail": "download"
-    }
-  },
-  "type": "module"
+    "dev:web": "pnpm --filter @my-creations/web dev",
+    "dev:api": "pnpm --filter @my-creations/api start:dev",
+    "build:web": "pnpm --filter @my-creations/web build",
+    "build:api": "pnpm --filter @my-creations/api build",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint"
+  }
 }
