@@ -18,7 +18,7 @@ def chat(request: ChatRequest):
 
         answer = service.generate(
             provider=request.provider.value,
-            prompt=request.prompt
+            messages=request.messages
         )
 
         return ChatResponse(

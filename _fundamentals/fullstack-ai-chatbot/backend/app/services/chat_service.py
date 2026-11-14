@@ -1,4 +1,5 @@
 
+from app.schemas.chat import ChatMessage
 from app.services.base_llm import BaseLLMService
 from app.services.gemini_service import GeminiService
 from app.services.openai_service import OpenAIService
@@ -24,9 +25,9 @@ class ChatService:
     def generate(
         self,
         provider: str,
-        prompt: str
+        messages: list[ChatMessage]
     ) -> str:
 
         llm = self.get_provider(provider)
 
-        return llm.generate(prompt)
+        return llm.generate(messages)
