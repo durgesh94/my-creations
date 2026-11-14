@@ -1,5 +1,6 @@
 
 from abc import ABC, abstractmethod
+from collections.abc import Iterator
 
 from app.schemas.chat import ChatMessage
 
@@ -11,5 +12,11 @@ class BaseLLMService(ABC):
         self,
         messages: list[ChatMessage]
     ) -> str:
-        """Generate response using conversation history."""
+        pass
+
+    @abstractmethod
+    def stream(
+        self,
+        messages: list[ChatMessage]
+    ) -> Iterator[str]:
         pass

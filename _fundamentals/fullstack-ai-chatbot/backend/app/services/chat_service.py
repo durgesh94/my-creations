@@ -1,4 +1,6 @@
 
+from collections.abc import Iterator
+
 from app.schemas.chat import ChatMessage
 from app.services.base_llm import BaseLLMService
 from app.services.gemini_service import GeminiService
@@ -11,7 +13,6 @@ class ChatService:
         self,
         provider: str
     ) -> BaseLLMService:
-
         if provider == "gemini":
             return GeminiService()
 
@@ -19,7 +20,7 @@ class ChatService:
             return OpenAIService()
 
         raise ValueError(
-            f"Unsupported AI provider: {provider}"
+            f"Unsupported provider: {provider}"
         )
 
     def generate(
@@ -27,7 +28,11 @@ class ChatService:
         provider: str,
         messages: list[ChatMessage]
     ) -> str:
+        return self.get_provider(provider).generate(messages)
 
-        llm = self.get_provider(provider)
-
-        return llm.generate(messages)
+    def stream(
+        self,
+        provider: str,
+        messages: list[ChatMessage]
+    ) -> Iterator[str]:
+        return self.get_provider(provider).stream(messages)

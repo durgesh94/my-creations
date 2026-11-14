@@ -1,24 +1,12 @@
+import { useEffect, useRef, useState, type FormEvent } from "react";
 
-import {
-  useEffect,
-  useRef,
-  useState,
-  type FormEvent,
-} from "react";
+import { streamChatMessage } from "./services/chatStreamApi";
 
-import { sendChatMessage } from "./services/chatApi";
-
-import type {
-  AIProvider,
-  ChatMessage,
-} from "./types/chat";
+import type { AIProvider, ChatMessage } from "./types/chat";
 
 import "./App.css";
 
-type ConversationStore = Record<
-  AIProvider,
-  ChatMessage[]
->;
+type ConversationStore = Record<AIProvider, ChatMessage[]>;
 
 const initialConversations: ConversationStore = {
   gemini: [],
@@ -26,22 +14,20 @@ const initialConversations: ConversationStore = {
 };
 
 function App() {
-  const [provider, setProvider] =
-    useState<AIProvider>("gemini");
+  const [provider, setProvider] = useState<AIProvider>("gemini");
 
   const [conversations, setConversations] =
-    useState<ConversationStore>(
-      initialConversations
-    );
+    useState<ConversationStore>(initialConversations);
 
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const abortControllerRef =
-    useRef<AbortController | null>(null);
-
+  const abortRef = useRef<AbortController | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
+
+  // Synchronous guard against duplicate requests.
+  const activeRef = useRef(false);
 
   const messages = conversations[provider];
 
@@ -53,26 +39,25 @@ function App() {
 
   useEffect(() => {
     return () => {
-      abortControllerRef.current?.abort();
+      abortRef.current?.abort();
     };
   }, []);
 
-  function handleProviderChange(
-    nextProvider: AIProvider
-  ) {
-    abortControllerRef.current?.abort();
-    abortControllerRef.current = null;
-
+  function cancelActiveRequest() {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    activeRef.current = false;
     setLoading(false);
-    setError(null);
+  }
+
+  function handleProviderChange(nextProvider: AIProvider) {
+    cancelActiveRequest();
     setProvider(nextProvider);
+    setError(null);
   }
 
   function clearConversation() {
-    abortControllerRef.current?.abort();
-    abortControllerRef.current = null;
-
-    setLoading(false);
+    cancelActiveRequest();
     setError(null);
 
     setConversations((previous) => ({
@@ -81,16 +66,19 @@ function App() {
     }));
   }
 
-  async function handleSend(
-    event: FormEvent<HTMLFormElement>
-  ) {
+  async function handleSend(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const prompt = input.trim();
 
-    if (!prompt || loading) return;
+    if (!prompt || activeRef.current) return;
+
+    activeRef.current = true;
 
     const currentProvider = provider;
+
+    const controller = new AbortController();
+    abortRef.current = controller;
 
     const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
@@ -98,77 +86,93 @@ function App() {
       content: prompt,
     };
 
-    // Build history before updating React state.
-    const history = [
-      ...conversations[currentProvider],
-      userMessage,
-    ];
+    const assistantMessage: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: "assistant",
+      content: "",
+    };
 
-    const controller = new AbortController();
+    const history = [...conversations[currentProvider], userMessage];
 
-    abortControllerRef.current = controller;
-
-    setLoading(true);
-    setError(null);
     setInput("");
+    setError(null);
+    setLoading(true);
 
+    // Add both messages immediately.
     setConversations((previous) => ({
       ...previous,
-      [currentProvider]: history,
+      [currentProvider]: [...history, assistantMessage],
     }));
 
+    let generatedText = "";
+
     try {
-      const result = await sendChatMessage(
+      await streamChatMessage(
         {
           provider: currentProvider,
-          messages: history.map(
-            ({ role, content }) => ({
-              role,
-              content,
-            })
-          ),
+          messages: history.map(({ role, content }) => ({
+            role,
+            content,
+          })),
         },
-        controller.signal
+        {
+          onDelta: (delta) => {
+            if (controller.signal.aborted) return;
+
+            generatedText += delta;
+
+            setConversations((previous) => ({
+              ...previous,
+              [currentProvider]: previous[currentProvider].map((message) =>
+                message.id === assistantMessage.id
+                  ? {
+                      ...message,
+                      content: generatedText,
+                    }
+                  : message,
+              ),
+            }));
+          },
+        },
+        controller.signal,
       );
 
-      if (controller.signal.aborted) return;
-
-      const assistantMessage: ChatMessage = {
-        id: crypto.randomUUID(),
-        role: "assistant",
-        content: result.response,
-      };
-
-      setConversations((previous) => ({
-        ...previous,
-        [currentProvider]: [
-          ...previous[currentProvider],
-          assistantMessage,
-        ],
-      }));
+      if (!generatedText.trim()) {
+        throw new Error("AI returned no text");
+      }
     } catch (err) {
       if (controller.signal.aborted) return;
 
-      // Remove the failed user message so the
-      // next request has a valid conversation.
+      setError(err instanceof Error ? err.message : "Streaming failed");
+
+      // Remove the failed turn, preserving
+      // the previously completed conversation.
       setConversations((previous) => ({
         ...previous,
-        [currentProvider]:
-          previous[currentProvider].filter(
-            (message) => message.id !== userMessage.id
-          ),
+        [currentProvider]: previous[currentProvider].filter(
+          (message) =>
+            message.id !== userMessage.id && message.id !== assistantMessage.id,
+        ),
       }));
 
       setInput(prompt);
-
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Something went wrong"
-      );
     } finally {
-      if (abortControllerRef.current === controller) {
-        abortControllerRef.current = null;
+      if (controller.signal.aborted) {
+        // Remove the interrupted turn from conversation
+        // history so it isn't sent as completed context.
+        setConversations((previous) => ({
+          ...previous,
+          [currentProvider]: previous[currentProvider].filter(
+            (message) =>
+              message.id !== userMessage.id &&
+              message.id !== assistantMessage.id,
+          ),
+        }));
+      }
+
+      if (abortRef.current === controller) {
+        abortRef.current = null;
+        activeRef.current = false;
         setLoading(false);
       }
     }
@@ -179,69 +183,44 @@ function App() {
       <header className="header">
         <div>
           <h1>🤖 AI Chatbot</h1>
-          <p>React + FastAPI + OpenAI + Gemini</p>
+          <p>FastAPI + React + AI Streaming</p>
         </div>
 
-        <button
-          className="clear-button"
-          onClick={clearConversation}
-        >
+        <button className="clear-button" onClick={clearConversation}>
           Clear Chat
         </button>
       </header>
 
       <div className="provider-bar">
-        <label htmlFor="provider">
-          AI Provider
-        </label>
+        <label htmlFor="provider">AI Provider</label>
 
         <select
           id="provider"
           value={provider}
           onChange={(event) =>
-            handleProviderChange(
-              event.target.value as AIProvider
-            )
+            handleProviderChange(event.target.value as AIProvider)
           }
         >
-          <option value="gemini">
-            Google Gemini
-          </option>
-
-          <option value="openai">
-            OpenAI GPT
-          </option>
+          <option value="gemini">Google Gemini</option>
+          <option value="openai">OpenAI GPT</option>
         </select>
       </div>
 
       <main className="chat-container">
-        {messages.length === 0 ? (
+        {messages.length === 0 && (
           <div className="empty-state">
             <h2>How can I help you today?</h2>
-            <p>
-              Start a conversation with {provider}.
-            </p>
+            <p>Start chatting with {provider}.</p>
           </div>
-        ) : (
-          messages.map((message) => (
-            <div
-              key={message.id}
-              className={`message ${message.role}`}
-            >
-              <div className="message-content">
-                {message.content}
-              </div>
-            </div>
-          ))
         )}
 
-        {loading && (
-          <div className="message assistant">
+        {messages.map((message) => (
+          <div key={message.id} className={`message ${message.role}`}>
             <div className="message-content">
-              AI is thinking...
+              {message.content || (loading ? "Thinking..." : "")}
             </div>
           </div>
-        )}
+        ))}
 
         <div ref={chatEndRef} />
       </main>
@@ -252,26 +231,24 @@ function App() {
         </div>
       )}
 
-      <form
-        className="chat-form"
-        onSubmit={handleSend}
-      >
+      <form className="chat-form" onSubmit={handleSend}>
         <input
           type="text"
-          placeholder="Ask me anything..."
           value={input}
-          onChange={(event) =>
-            setInput(event.target.value)
-          }
+          placeholder="Ask me anything..."
+          onChange={(event) => setInput(event.target.value)}
           disabled={loading}
         />
 
-        <button
-          type="submit"
-          disabled={loading || !input.trim()}
-        >
-          {loading ? "Sending..." : "Send"}
-        </button>
+        {loading ? (
+          <button type="button" onClick={cancelActiveRequest}>
+            Stop
+          </button>
+        ) : (
+          <button type="submit" disabled={!input.trim()}>
+            Send
+          </button>
+        )}
       </form>
     </div>
   );
