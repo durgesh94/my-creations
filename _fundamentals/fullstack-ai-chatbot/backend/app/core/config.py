@@ -11,10 +11,13 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-5.4-nano"
     gemini_model: str = "gemini-2.5-flash"
 
+    # PostgreSQL connection
+    database_url: str
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
-        extra="ignore"
+        extra="ignore",
     )
 
 

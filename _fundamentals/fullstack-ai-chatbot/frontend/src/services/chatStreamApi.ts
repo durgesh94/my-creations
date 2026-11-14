@@ -146,3 +146,102 @@ export async function streamChatMessage(
     reader.releaseLock();
   }
 }
+
+
+export async function streamConversationMessage(
+  conversationId: string,
+  content: string,
+  callbacks: {
+    onDelta: (text: string) => void;
+  },
+  signal?: AbortSignal
+): Promise<void> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/v1/conversations/${conversationId}/messages/stream`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "text/event-stream",
+      },
+      body: JSON.stringify({ content }),
+      signal,
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Streaming failed: HTTP ${response.status}`
+    );
+  }
+
+  if (!response.body) {
+    throw new Error("Streaming response is empty");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+
+  let buffer = "";
+  let completed = false;
+
+  function processEvent(block: string) {
+    const parsed = parseEvent(block);
+    if (!parsed) return;
+
+    if (parsed.event === "delta") {
+      if (typeof parsed.data.content === "string") {
+        callbacks.onDelta(parsed.data.content);
+      }
+    }
+
+    if (parsed.event === "error") {
+      throw new Error(
+        typeof parsed.data.message === "string"
+          ? parsed.data.message
+          : "AI generation failed"
+      );
+    }
+
+    if (parsed.event === "done") {
+      completed = true;
+    }
+  }
+
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+
+      if (done) break;
+
+      buffer += decoder
+        .decode(value, { stream: true })
+        .replace(/\r\n/g, "\n");
+
+      let boundary: number;
+
+      while ((boundary = buffer.indexOf("\n\n")) !== -1) {
+        const block = buffer.slice(0, boundary);
+        buffer = buffer.slice(boundary + 2);
+
+        processEvent(block);
+      }
+    }
+
+    buffer += decoder.decode();
+
+    if (buffer.trim()) {
+      processEvent(buffer);
+    }
+
+    if (!completed) {
+      throw new Error(
+        "Stream ended before completion"
+      );
+    }
+  } finally {
+    await reader.cancel().catch(() => {});
+    reader.releaseLock();
+  }
+}
+
