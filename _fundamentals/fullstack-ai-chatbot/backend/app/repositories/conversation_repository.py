@@ -1,8 +1,9 @@
+
 from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.conversation import Conversation
@@ -58,8 +59,27 @@ class ConversationRepository:
         role: str,
         content: str
     ) -> Message:
+
+        # Lock the conversation while allocating a sequence number.
+        conversation = self.db.scalar(
+            select(Conversation)
+            .where(Conversation.id == conversation_id)
+            .with_for_update()
+        )
+
+        if conversation is None:
+            raise ValueError("Conversation not found")
+
+        # Find the last sequence number for this conversation.
+        last_sequence = self.db.scalar(
+            select(func.max(Message.sequence_number))
+            .where(Message.conversation_id == conversation_id)
+        ) or 0
+
+        # Create the next message.
         message = Message(
             conversation_id=conversation_id,
+            sequence_number=last_sequence + 1,
             role=role,
             content=content
         )

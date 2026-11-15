@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, func
+from sqlalchemy import DateTime, ForeignKey, String, Text, Integer, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -36,6 +36,11 @@ class Message(Base):
 
     content: Mapped[str] = mapped_column(
         Text,
+        nullable=False,
+    )
+    
+    sequence_number: Mapped[int] = mapped_column(
+        Integer,
         nullable=False,
     )
 

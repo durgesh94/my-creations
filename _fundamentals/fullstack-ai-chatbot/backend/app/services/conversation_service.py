@@ -14,10 +14,12 @@ from app.schemas.conversation import ConversationCreate
 
 class ConversationService:
 
+    # Initialize the service with a database session and repository.
     def __init__(self, db: Session):
         self.db = db
         self.repo = ConversationRepository(db)
 
+    # Create a new conversation with the given request data.
     def create(
         self,
         request: ConversationCreate
@@ -32,9 +34,11 @@ class ConversationService:
 
         return conversation
 
+    # List all conversations.
     def list_all(self) -> list[Conversation]:
         return self.repo.list_all()
 
+    # Get a conversation by its ID.
     def get(
         self,
         conversation_id: uuid.UUID
@@ -49,6 +53,7 @@ class ConversationService:
 
         return conversation
 
+    # Delete a conversation by its ID.
     def delete(
         self,
         conversation_id: uuid.UUID
@@ -58,6 +63,7 @@ class ConversationService:
         self.repo.delete(conversation)
         self.db.commit()
 
+    # Save a turn (user and assistant messages) for a conversation.
     def save_turn(
         self,
         conversation_id: uuid.UUID,
@@ -65,6 +71,9 @@ class ConversationService:
         assistant_content: str
     ) -> None:
         conversation = self.get(conversation_id)
+        
+        if conversation.title.casefold() == "new conversation":
+            conversation.title = self.generate_title(user_content)
 
         self.repo.add_message(
             conversation_id,
@@ -83,3 +92,16 @@ class ConversationService:
 
         # Both messages are saved atomically.
         self.db.commit()
+    
+    # Generate a title for a conversation based on the first user message.
+    @staticmethod
+    def generate_title(message: str) -> str:
+        title = " ".join(message.strip().split())
+
+        if not title:
+            return "New Conversation"
+
+        if len(title) > 60:
+            title = title[:57].rsplit(" ", 1)[0] + "..."
+
+        return title
