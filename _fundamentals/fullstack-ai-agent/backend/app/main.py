@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.chat import router as chat_router
 from app.api.conversations import router as conversations_router
+from app.api.agent import router as agent_router
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -28,6 +29,9 @@ app.include_router(chat_router)
 
 # Include the conversations router
 app.include_router(conversations_router)
+
+# Include the agent router
+app.include_router(agent_router)
 
 # Health check endpoint
 @app.get("/api/v1/health")

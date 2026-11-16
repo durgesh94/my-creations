@@ -5,7 +5,7 @@ anyio==4.12.1
 certifi==2026.10.23
 cffi==2.0.0
 charset-normalizer==3.5.2
-click==8.1.8
+click>=8.2.1
 cryptography==50.0.2
 distro==1.9.0
 dnspython==2.7.0
@@ -15,8 +15,8 @@ fastapi==0.128.8
 fastapi-cli==0.0.22
 fastapi-cloud-cli==0.12.0
 fastar==0.12.0
-google-auth==2.50.0
-google-genai==1.47.0
+google-auth>=2.56.0
+google-genai>=3.2.0
 h11==0.16.0
 httpcore==1.0.9
 httptools==0.9.0
@@ -62,3 +62,6 @@ uvicorn==0.39.0
 uvloop==0.23.0
 watchfiles==1.1.1
 websockets==15.0.1
+langchain-core>=1.0
+langchain-google-genai>=4.0
+langgraph>=1.0

@@ -11,6 +11,12 @@ from app.repositories.conversation_repository import (
 )
 from app.schemas.conversation import ConversationCreate
 
+from langchain_core.messages import (
+    HumanMessage,
+    AIMessage,
+    BaseMessage,
+)
+
 
 class ConversationService:
 
@@ -105,3 +111,31 @@ class ConversationService:
             title = title[:57].rsplit(" ", 1)[0] + "..."
 
         return title
+    
+    # Get all messages for a conversation in LangGraph format.
+    def get_langgraph_messages(
+    self,
+    conversation_id: uuid.UUID,
+    ) -> list[BaseMessage]:
+
+        # Validate that the conversation exists.
+        self.get(conversation_id)
+
+        db_messages = self.repo.get_messages(conversation_id)
+
+        history: list[BaseMessage] = []
+
+        for message in db_messages:
+            if message.role == "user":
+                history.append(
+                    HumanMessage(content=message.content)
+                )
+
+            elif message.role == "assistant":
+                history.append(
+                    AIMessage(content=message.content)
+                )
+
+        return history
+
+

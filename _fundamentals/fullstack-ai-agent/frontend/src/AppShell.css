@@ -1,0 +1,57 @@
+.app-root {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+}
+
+.landing {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  padding: 24px;
+}
+
+.landing-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 16px;
+}
+
+.landing-card {
+  width: 240px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #111827;
+  text-decoration: none;
+}
+
+.landing-card span {
+  color: #4b5563;
+  font-size: 14px;
+}
+
+.landing-card:hover,
+.landing-card:focus-visible {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px #dbeafe;
+}
+
+.app-view {
+  flex: 1;
+  min-height: 0;
+}
+
+.app-view > .chat-layout,
+.app-view > .app-shell,
+.app-view .chat-layout > .app {
+  height: 100%;
+}

@@ -61,3 +61,5 @@ __pycache__/
 .venv/
 chroma_db/
 __pycache__/
+
+**/.venv-py39-backup/*

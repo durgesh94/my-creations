@@ -94,3 +94,18 @@ class ConversationRepository:
         conversation: Conversation
     ) -> None:
         self.db.delete(conversation)
+        
+    
+    def get_messages(
+        self,
+        conversation_id: uuid.UUID,
+    ) -> list[Message]:
+
+        stmt = (
+            select(Message)
+            .where(Message.conversation_id == conversation_id)
+            .order_by(Message.sequence_number.asc())
+        )
+
+        return list(self.db.scalars(stmt).all())
+
