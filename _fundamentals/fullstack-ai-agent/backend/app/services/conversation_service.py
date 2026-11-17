@@ -138,4 +138,29 @@ class ConversationService:
 
         return history
 
+    # Touch a conversation to update its metadata without adding new messages.
+    def touch(
+        self,
+        conversation_id: uuid.UUID,
+        user_message: str | None = None,
+    ) -> None:
+        """
+        Update conversation metadata only.
 
+        Chat messages are persisted by LangGraph.
+        """
+
+        conversation = self.get(conversation_id)
+
+        if (
+            user_message
+            and conversation.title.casefold()
+            == "new conversation"
+        ):
+            conversation.title = self.generate_title(
+                user_message
+            )
+
+        conversation.updated_at = func.now()
+
+        self.db.commit()

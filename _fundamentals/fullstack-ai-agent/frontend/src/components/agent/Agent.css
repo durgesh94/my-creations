@@ -363,3 +363,46 @@ button:disabled {
     opacity: 0.4;
   }
 }
+
+.approval-card {
+  margin: 16px 0 16px 52px;
+  padding: 18px;
+  border: 1px solid #64748b;
+  border-radius: 12px;
+  background: #1e293b;
+  color: #f8fafc;
+}
+
+.approval-card h3 {
+  margin: 0 0 12px;
+}
+
+.approval-card p {
+  margin: 6px 0;
+}
+
+.approval-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.approval-actions button {
+  padding: 10px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid #64748b;
+  background: #334155;
+  color: white;
+}
+
+.approval-actions button:first-child {
+  background: #2563eb;
+  border-color: #2563eb;
+}
+
+.approval-actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+

@@ -31,9 +31,24 @@ interface ConversationDetail extends Conversation {
   }>;
 }
 
+interface AppointmentApproval {
+  type: string;
+  doctor_id: string;
+  appointment_date: string;
+  appointment_time: string;
+  message: string;
+}
+
 interface AgentChatResponse {
   conversation_id: string;
+  status: "completed" | "approval_required";
   response: string;
+  approval: AppointmentApproval | null;
+}
+
+interface PendingApprovalResponse {
+  status: "completed" | "approval_required";
+  approval: AppointmentApproval | null;
 }
 
 async function apiRequest<T>(
@@ -87,6 +102,20 @@ const conversationApi = {
 };
 
 const agentApi = {
+  pending: (conversationId: string) =>
+    apiRequest<PendingApprovalResponse>(
+      `/api/v1/agent/pending/${conversationId}`
+    ),
+
+  approve: (conversationId: string, decision: "approve" | "reject") =>
+    apiRequest<AgentChatResponse>("/api/v1/agent/approval", {
+      method: "POST",
+      body: JSON.stringify({
+        conversation_id: conversationId,
+        decision,
+      }),
+    }),
+
   chat: (conversationId: string, message: string) =>
     apiRequest<AgentChatResponse>("/api/v1/agent/chat", {
       method: "POST",
@@ -110,6 +139,8 @@ function Agent() {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [pendingApproval, setPendingApproval] =
+    useState<AppointmentApproval | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const activeIdRef = useRef<string | null>(null);
@@ -124,7 +155,7 @@ function Agent() {
     messagesEndRef.current?.scrollIntoView({
       behavior: "smooth",
     });
-  }, [messages, loading]);
+  }, [messages, loading, pendingApproval]);
 
   async function loadConversations() {
     try {
@@ -142,6 +173,7 @@ function Agent() {
     activeIdRef.current = id;
     setActiveConversationId(id);
     setMessages([]);
+    setPendingApproval(null);
     setError(null);
     setLoadingHistory(true);
 
@@ -166,6 +198,14 @@ function Agent() {
             role: message.role,
             content: message.content,
           }))
+      );
+
+      const pending = await agentApi.pending(id);
+      if (requestId !== historyRequestRef.current) return;
+      setPendingApproval(
+        pending.status === "approval_required"
+          ? pending.approval
+          : null
       );
     } catch (err) {
       if (requestId === historyRequestRef.current) {
@@ -193,6 +233,7 @@ function Agent() {
       activeIdRef.current = conversation.id;
       setActiveConversationId(conversation.id);
       setMessages([]);
+      setPendingApproval(null);
       setInput("");
       setLoadingHistory(false);
 
@@ -229,6 +270,7 @@ function Agent() {
         activeIdRef.current = null;
         setActiveConversationId(null);
         setMessages([]);
+        setPendingApproval(null);
       }
     } catch (err) {
       setError(getErrorMessage(err));
@@ -244,7 +286,8 @@ function Agent() {
       !message ||
       busyRef.current ||
       creating ||
-      loadingHistory
+      loadingHistory ||
+      pendingApproval !== null
     ) {
       return;
     }
@@ -288,6 +331,11 @@ function Agent() {
           content: result.response,
         },
       ]);
+      setPendingApproval(
+        result.status === "approval_required"
+          ? result.approval
+          : null
+      );
 
       // Refresh generated conversation titles and ordering.
       await loadConversations();
@@ -316,6 +364,50 @@ function Agent() {
         );
       } catch {
         // Keep the optimistic message visible.
+      }
+    } finally {
+      busyRef.current = false;
+      setLoading(false);
+    }
+  }
+
+  async function handleApproval(decision: "approve" | "reject") {
+    const conversationId = activeIdRef.current;
+    if (!conversationId || !pendingApproval || busyRef.current) return;
+
+    busyRef.current = true;
+    setLoading(true);
+    setError(null);
+
+    try {
+      const result = await agentApi.approve(conversationId, decision);
+      if (activeIdRef.current !== conversationId) return;
+
+      setPendingApproval(
+        result.status === "approval_required"
+          ? result.approval
+          : null
+      );
+      setMessages((previous) => [
+        ...previous,
+        {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: result.response,
+        },
+      ]);
+      await loadConversations();
+    } catch (err) {
+      setError(getErrorMessage(err));
+      // Re-read graph state: approval might have completed
+      // even if the network response was lost.
+      try {
+        const state = await agentApi.pending(conversationId);
+        if (activeIdRef.current === conversationId) {
+          setPendingApproval(state.approval);
+        }
+      } catch {
+        // Keep the approval controls visible for inspection.
       }
     } finally {
       busyRef.current = false;
@@ -486,6 +578,31 @@ function Agent() {
             </div>
           ))}
 
+          {pendingApproval && !loadingHistory && (
+            <div className="approval-card" role="group" aria-label="Appointment approval">
+              <h3>Confirm mock appointment</h3>
+              <p>Doctor ID: {pendingApproval.doctor_id}</p>
+              <p>Date: {pendingApproval.appointment_date}</p>
+              <p>Time: {pendingApproval.appointment_time}</p>
+              <div className="approval-actions">
+                <button
+                  type="button"
+                  onClick={() => void handleApproval("approve")}
+                  disabled={loading}
+                >
+                  Confirm Booking
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleApproval("reject")}
+                  disabled={loading}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
           {loading && (
             <div className="message-row assistant">
               <div className="message-avatar">AI</div>
@@ -527,13 +644,16 @@ function Agent() {
               onKeyDown={handleInputKeyDown}
               placeholder={
                 activeConversationId
-                  ? "Message Hospital AI..."
+                  ? pendingApproval
+                    ? "Confirm or cancel the pending booking above"
+                    : "Message Hospital AI..."
                   : "Create a conversation to start..."
               }
               disabled={
                 !activeConversationId ||
                 loading ||
-                loadingHistory
+                loadingHistory ||
+                pendingApproval !== null
               }
               rows={2}
             />
@@ -545,7 +665,8 @@ function Agent() {
                 !input.trim() ||
                 !activeConversationId ||
                 loading ||
-                loadingHistory
+                loadingHistory ||
+                pendingApproval !== null
               }
             >
               {loading ? "..." : "➤"}
